@@ -1,0 +1,12 @@
+1. you are to build a website built with react that is used in an educational setting to teach college students in computer science how to diagram various scenarios. The website must clearly teach:
+a. The purpose of each diagram
+b. The process used to build each diagram
+c. How the diagrams connect to one another. To do this, have 5 tabs total at the top, with each tab linking to an interactive diagram shown spanning 3/4s of the page. there should be a panel on the left side covering the remaining space. the diagrams will be specified in detail in diagramstext.txt. each node and each relationship should be its own interactive entity and be clickable. using the justifications also found in diagramstext.txt for each node/link, any clicked node or link should display the justification on the left side panel. you may use diagramstext.txt to create an sqlitefile containing these to organize the nodes and links that you can then call upon if it helps with instead processing diagramstext.txt. also in the left side panel, there should be an additional dropdown that u can click to reveal additional text . in the top right corner, on the same line as the tabs but not being a tab itself should be an info icon that, when clicked, opens a pop up that also displays additional text.
+
+2.make purpose and process to build on the left panel and how it connects drop downs just like additional text; same with clicked entity justification, but make it automatically undropdown when a node / link is clicked. additionally, make it so that only one dropdown in the leftside panel can be open at a time
+
+3. can you make it so that each "node" displays the name of the node, so that NODE [L1] Daniel (Actor - Officer)\r for example, displays the Daniel in the node title position and (Actor - Officer) in the subtitle position
+
+4. in the case of all of these diagrams, each one of them displays in a different way. can yo u adapt the current ui way of displaying diagrams from graphs of nodes and edges to ones customized for each type? they are in order: sequence diagram, system sequence diagram, domain model diagram, design class diagram, use case diagram
+
+5. for sequence diagrams, the "links" should display the "login(danielCredentials)" part of "LINK [M01] L1 -> L4 | SYNCHRONOUS | login(danielCredentials)\r" and the arrow lines should be dotted if the second value of ()"SYNCHRONOUS" or "RETURN" ) is "RETURN"
