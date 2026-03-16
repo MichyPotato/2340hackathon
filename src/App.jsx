@@ -522,10 +522,10 @@ function renderDomainModelDiagram(diagram, selectedEntity, onSelect) {
       targetMultiplicityPos: { x: 382, y: 850 },
     },
     R9: {
-      points: [{ x: 632, y: 820 }, { x: 632, y: 620 }, { x: 740, y: 620 }, { x: 740, y: 257 }],
-      label: { x: 646, y: 612 },
+      points: [{ x: 632, y: 820 }, { x: 632, y: 620 }, { x: 640, y: 620 }, { x: 640, y: 300 }, { x: 760, y: 300 }, { x: 760, y: 257 }],
+      label: { x: 700, y: 292 },
       sourceMultiplicityPos: { x: 646, y: 810 },
-      targetMultiplicityPos: { x: 754, y: 276 },
+      targetMultiplicityPos: { x: 774, y: 276 },
     },
     R10: {
       points: [{ x: 88, y: 200 }, { x: 32, y: 200 }, { x: 32, y: 820 }, { x: 968, y: 820 }],
