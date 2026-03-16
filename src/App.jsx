@@ -679,6 +679,48 @@ function renderDomainModelDiagram(diagram, selectedEntity, onSelect) {
 
 function renderDesignClassDiagram(diagram, selectedEntity, onSelect) {
   const positions = getGridPositions(diagram.nodes, CANVAS_WIDTH, 140, 2, 340)
+  const diagonalMidpointGroups = new Map()
+  const diagonalLabelOffsets = {}
+  const targetedCrossingLabelOffsets = {
+    A2: { x: 72, y: 55 },
+    A7: { x: 72, y: -55 },
+    A5: { x: -72, y: 55 },
+    A8: { x: -72, y: -55 },
+  }
+
+  diagram.links.forEach((link) => {
+    const source = positions[link.source]
+    const target = positions[link.target]
+    if (!source || !target) {
+      return
+    }
+
+    const dx = target.x - source.x
+    const dy = target.y - source.y
+    const isDiagonal = dx !== 0 && dy !== 0
+    if (!isDiagonal) {
+      return
+    }
+
+    const key = `${Math.round((source.x + target.x) / 2)}:${Math.round((source.y + target.y) / 2)}`
+    if (!diagonalMidpointGroups.has(key)) {
+      diagonalMidpointGroups.set(key, [])
+    }
+    diagonalMidpointGroups.get(key).push(link.id)
+  })
+
+  diagonalMidpointGroups.forEach((linkIds) => {
+    if (linkIds.length < 2) {
+      return
+    }
+
+    const ordered = [...linkIds].sort()
+    const step = 24
+    const start = -((ordered.length - 1) * step) / 2
+    ordered.forEach((id, index) => {
+      diagonalLabelOffsets[id] = start + index * step
+    })
+  })
 
   return (
     <svg viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT + 540}`} className="diagram-svg" role="img" aria-label={diagram.title}>
@@ -696,10 +738,8 @@ function renderDesignClassDiagram(diagram, selectedEntity, onSelect) {
         }
         const isSelected = selectedEntity?.kind === 'link' && selectedEntity.id === link.id
         const isDependency = link.relationType.toUpperCase().includes('DEPENDENCY')
-        const labelX = (source.x + target.x) / 2
-        const labelY = (source.y + target.y) / 2
         return (
-          <g key={link.id} className="link-group" onClick={() => onSelect({ kind: 'link', entity: link })}>
+          <g key={`${link.id}-line`} className="link-group" onClick={() => onSelect({ kind: 'link', entity: link })}>
             <line
               x1={source.x}
               y1={source.y}
@@ -710,10 +750,6 @@ function renderDesignClassDiagram(diagram, selectedEntity, onSelect) {
               strokeDasharray={isDependency ? '8 6' : 'none'}
             />
             <line x1={source.x} y1={source.y} x2={target.x} y2={target.y} className="link-hitbox" />
-            <rect x={labelX - 90} y={labelY - 15} width="180" height="30" rx="8" className="link-label-bg" />
-            <text x={labelX} y={labelY + 5} className="link-label-text">
-              {link.id}: {link.relationType}
-            </text>
           </g>
         )
       })}
@@ -741,6 +777,28 @@ function renderDesignClassDiagram(diagram, selectedEntity, onSelect) {
                 {method.replace(/^METHOD:\s*/i, '').slice(0, 42)}
               </text>
             ))}
+          </g>
+        )
+      })}
+
+      {diagram.links.map((link) => {
+        const source = positions[link.source]
+        const target = positions[link.target]
+        if (!source || !target) {
+          return null
+        }
+
+        const targetedOffset = targetedCrossingLabelOffsets[link.id] || { x: 0, y: 0 }
+        const labelX = (source.x + target.x) / 2 + targetedOffset.x
+        const labelY = (source.y + target.y) / 2 + (diagonalLabelOffsets[link.id] || 0) + targetedOffset.y
+        const isSelected = selectedEntity?.kind === 'link' && selectedEntity.id === link.id
+
+        return (
+          <g key={`${link.id}-label`} className="link-group" onClick={() => onSelect({ kind: 'link', entity: link })}>
+            <rect x={labelX - 90} y={labelY - 15} width="180" height="30" rx="8" className={isSelected ? 'link-label-bg selected' : 'link-label-bg'} />
+            <text x={labelX} y={labelY + 5} className="link-label-text">
+              {link.id}: {link.relationType}
+            </text>
           </g>
         )
       })}
