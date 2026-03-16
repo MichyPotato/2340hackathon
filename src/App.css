@@ -52,6 +52,12 @@
   color: var(--ink);
   font-weight: 800;
   cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.info-button:hover {
+  background: rgba(255, 255, 255, 0.85);
+  transform: translateY(-1px);
 }
 
 .workspace-grid {
@@ -130,6 +136,8 @@
 }
 
 .diagram-panel {
+  overflow: auto;
+  padding: 18px;
   background:
     radial-gradient(circle at 20% 18%, color-mix(in srgb, var(--node) 14%, transparent), transparent 28%),
     radial-gradient(circle at 85% 10%, color-mix(in srgb, var(--focus) 16%, transparent), transparent 34%),
@@ -139,6 +147,7 @@
 .diagram-svg {
   width: 100%;
   min-height: 780px;
+  display: block;
 }
 
 .diagram-link {
@@ -150,6 +159,11 @@
 .diagram-link.selected {
   stroke: var(--focus);
   stroke-width: 4;
+}
+
+.diagram-link.played {
+  stroke: var(--focus);
+  stroke-width: 3.4;
 }
 
 .arrowhead-shape {
@@ -172,6 +186,11 @@
 .link-label-bg.selected {
   stroke: var(--focus);
   stroke-width: 2;
+}
+
+.link-label-bg.current {
+  stroke: var(--focus);
+  stroke-width: 2.4;
 }
 
 .link-label-text {
@@ -240,6 +259,43 @@
 
 .domain-link-label.selected {
   fill: var(--focus);
+}
+
+.usecase-boundary-title {
+  text-anchor: middle;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.usecase-relationship-label {
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--ink-soft);
+  paint-order: stroke;
+  stroke: rgba(248, 248, 244, 0.96);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+
+.usecase-relationship-label.selected {
+  fill: var(--focus);
+}
+
+.design-link-label,
+.design-link-multiplicity {
+  paint-order: stroke;
+  stroke: rgba(248, 248, 244, 0.96);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+
+.design-link-label.selected,
+.design-link-multiplicity.selected {
+  fill: var(--focus);
+}
+
+.design-link-multiplicity {
+  font-size: 12px;
 }
 
 .node-group {
@@ -350,6 +406,40 @@
   stroke-width: 4;
 }
 
+.playback-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 12px rgba(22, 34, 42, 0.08);
+}
+
+.playback-button {
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--ink-soft);
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  min-width: 40px;
+}
+
+.playback-button.primary {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+  font-weight: 700;
+}
+
+.playback-status {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
 .node-id,
 .node-label {
   text-anchor: middle;
@@ -369,6 +459,11 @@
   letter-spacing: 0.01em;
 }
 
+.usecase-node-text {
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -382,6 +477,9 @@
   width: min(520px, 94vw);
   background: var(--page);
   border-color: var(--line-strong);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: #fffef8;
   border: 1px solid var(--line-strong);
   border-radius: 14px;
   padding: 16px;
@@ -405,6 +503,12 @@
   padding: 8px 12px;
   font-size: 0.9rem;
   cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.modal-card button:hover {
+  transform: translateY(-1px);
+  opacity: 0.95;
 }
 
 .info-button {
