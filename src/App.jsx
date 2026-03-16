@@ -681,50 +681,251 @@ function renderDomainModelDiagram(diagram, selectedEntity, onSelect) {
   )
 }
 
-function renderDesignClassDiagram(diagram, selectedEntity, onSelect) {
-  const positions = getGridPositions(diagram.nodes, CANVAS_WIDTH, 140, 2, 340)
-  const diagonalMidpointGroups = new Map()
-  const diagonalLabelOffsets = {}
-  const targetedCrossingLabelOffsets = {
-    A2: { x: 72, y: 55 },
-    A7: { x: 72, y: -55 },
-    A5: { x: -72, y: 55 },
-    A8: { x: -72, y: -55 },
+function computeOrthoLanes(links, getPos) {
+  const BAND = 20
+  const items = links.map((link) => {
+    const s = getPos(link.source)
+    const t = getPos(link.target)
+    if (!s || !t) return null
+    return {
+      id: link.id,
+      baseMidX: (s.x + t.x) / 2,
+      minY: Math.min(s.y, t.y),
+      maxY: Math.max(s.y, t.y),
+      offset: 0,
+    }
+  })
+
+  for (let pass = 0; pass < 4; pass++) {
+    for (let i = 0; i < items.length; i++) {
+      if (!items[i]) continue
+      for (let j = i + 1; j < items.length; j++) {
+        if (!items[j]) continue
+        const laneI = items[i].baseMidX + items[i].offset
+        const laneJ = items[j].baseMidX + items[j].offset
+        if (Math.abs(laneI - laneJ) >= BAND) continue
+        const yOverlap = items[i].minY < items[j].maxY && items[j].minY < items[i].maxY
+        if (!yOverlap) continue
+        items[j].offset += BAND
+      }
+    }
   }
 
-  diagram.links.forEach((link) => {
-    const source = positions[link.source]
-    const target = positions[link.target]
-    if (!source || !target) {
-      return
-    }
+  const result = {}
+  links.forEach((link, idx) => {
+    result[link.id] = items[idx]?.offset ?? 0
+  })
+  return result
+}
 
-    const dx = target.x - source.x
-    const dy = target.y - source.y
-    const isDiagonal = dx !== 0 && dy !== 0
-    if (!isDiagonal) {
-      return
-    }
+function buildOrthoPath(sx, sy, tx, ty, laneX) {
+  return `M ${sx} ${sy} L ${laneX} ${sy} L ${laneX} ${ty} L ${tx} ${ty}`
+}
 
-    const key = `${Math.round((source.x + target.x) / 2)}:${Math.round((source.y + target.y) / 2)}`
-    if (!diagonalMidpointGroups.has(key)) {
-      diagonalMidpointGroups.set(key, [])
+function cleanRelationshipLabel(label) {
+  return (label || '').replace(/^"|"$/g, '').trim()
+}
+
+function parseLinkMultiplicity(notes) {
+  if (!notes) {
+    return ''
+  }
+
+  const match = notes.match(/multiplicity:\s*([^|]+)/i)
+  return match ? match[1].trim() : ''
+}
+
+function parseLinkMultiplicityParts(notes) {
+  const multiplicity = parseLinkMultiplicity(notes)
+  if (!multiplicity) {
+    return { source: '', target: '' }
+  }
+
+  const parts = multiplicity.split(/\s*->\s*/)
+  return {
+    source: parts[0]?.trim() || '',
+    target: parts[1]?.trim() || '',
+  }
+}
+
+function getOrthoInlineLabelPosition(sx, sy, tx, ty, laneX) {
+  const horizontalSegments = [
+    { x1: sx, x2: laneX, y: sy, length: Math.abs(laneX - sx) },
+    { x1: laneX, x2: tx, y: ty, length: Math.abs(tx - laneX) },
+  ].sort((left, right) => right.length - left.length)
+
+  const best = horizontalSegments[0]
+  if (best.length > 0) {
+    return {
+      x: (best.x1 + best.x2) / 2,
+      y: best.y,
     }
-    diagonalMidpointGroups.get(key).push(link.id)
+  }
+
+  return {
+    x: laneX,
+    y: (sy + ty) / 2,
+  }
+}
+
+function getDesignClassOrthoGeometry(source, target, laneX) {
+  const NODE_HALF_WIDTH = 150
+  const sourceDirection = Math.sign(laneX - source.x) || Math.sign(target.x - source.x) || 1
+  const targetDirection = Math.sign(laneX - target.x) || Math.sign(source.x - target.x) || -1
+  const sourceX = source.x + sourceDirection * NODE_HALF_WIDTH
+  const targetX = target.x + targetDirection * NODE_HALF_WIDTH
+
+  return {
+    start: { x: sourceX, y: source.y },
+    end: { x: targetX, y: target.y },
+    labelPoint: getOrthoInlineLabelPosition(sourceX, source.y, targetX, target.y, laneX),
+    d: buildOrthoPath(sourceX, source.y, targetX, target.y, laneX),
+  }
+}
+
+function getActorAnchor(actorPos, targetPos) {
+  const anchors = [
+    { x: actorPos.x,      y: actorPos.y - 52 }, // top  (above head)
+    { x: actorPos.x + 20, y: actorPos.y      }, // right (arm tip)
+    { x: actorPos.x,      y: actorPos.y + 50 }, // bottom (feet)
+    { x: actorPos.x - 20, y: actorPos.y      }, // left  (arm tip)
+  ]
+  const deg = Math.atan2(targetPos.y - actorPos.y, targetPos.x - actorPos.x) * 180 / Math.PI
+  if (deg >= -45 && deg < 45)   return anchors[1]
+  if (deg >= 45  && deg < 135)  return anchors[2]
+  if (deg >= -135 && deg < -45) return anchors[0]
+  return anchors[3]
+}
+
+function getEllipseAnchor(center, target, rx = 128, ry = 44) {
+  const dx = target.x - center.x
+  const dy = target.y - center.y
+  const scale = 1 / Math.sqrt((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) || 1)
+
+  return {
+    x: center.x + dx * scale,
+    y: center.y + dy * scale,
+  }
+}
+
+function getActorRoleLabel(node) {
+  const clean = (node.subtitle || '')
+    .replace(/[()]/g, '')
+    .replace(/^Actor\s*-\s*/i, '')
+    .replace(/^External Actor\s*-\s*/i, '')
+    .split(',')[0]
+    .split('/')[0]
+    .trim()
+
+  return clean || node.id
+}
+
+function getUseCaseDisplayLabel(node) {
+  const subtitle = (node.subtitle || '').replace(/^\(|\)$/g, '').trim()
+  if (!subtitle) {
+    return node.title
+  }
+
+  const compactSubtitle = subtitle.replace(/via external authentication/i, 'external auth')
+  return `${node.title} (${compactSubtitle})`
+}
+
+function renderDesignClassDiagram(diagram, selectedEntity, onSelect) {
+  const NODE_HALF_WIDTH = 150
+  const NODE_HALF_HEIGHT = 95
+  const customPositions = {
+    D1: { x: 760, y: 170 },
+    D4: { x: 260, y: 560 },
+    D2: { x: 1220, y: 560 },
+    D5: { x: 260, y: 1050 },
+    D3: { x: 1220, y: 1050 },
+  }
+  const fallbackPositions = getGridPositions(diagram.nodes, CANVAS_WIDTH, 140, 2, 340)
+  const positions = {}
+
+  diagram.nodes.forEach((node) => {
+    positions[node.id] = customPositions[node.id] || fallbackPositions[node.id]
   })
 
-  diagonalMidpointGroups.forEach((linkIds) => {
-    if (linkIds.length < 2) {
-      return
+  const routePoint = (nodeId, side, offset = 0) => {
+    const pos = positions[nodeId]
+    if (!pos) {
+      return { x: 0, y: 0 }
     }
+    if (side === 'top') {
+      return { x: pos.x + offset, y: pos.y - NODE_HALF_HEIGHT }
+    }
+    if (side === 'bottom') {
+      return { x: pos.x + offset, y: pos.y + NODE_HALF_HEIGHT }
+    }
+    if (side === 'left') {
+      return { x: pos.x - NODE_HALF_WIDTH, y: pos.y + offset }
+    }
+    return { x: pos.x + NODE_HALF_WIDTH, y: pos.y + offset }
+  }
 
-    const ordered = [...linkIds].sort()
-    const step = 24
-    const start = -((ordered.length - 1) * step) / 2
-    ordered.forEach((id, index) => {
-      diagonalLabelOffsets[id] = start + index * step
-    })
-  })
+  const designLinkRouting = {
+    A1: {
+      points: [routePoint('D1', 'right', 24), routePoint('D2', 'top', -96)],
+      label: { x: 1035, y: 455 },
+      sourceMultiplicityPos: { x: 890, y: 300 },
+      targetMultiplicityPos: { x: 1088, y: 418 },
+    },
+    A2: {
+      points: [routePoint('D1', 'left', 24), routePoint('D4', 'top', 102)],
+      label: { x: 520, y: 430 },
+    },
+    A3: {
+      points: [routePoint('D1', 'bottom', 120), { x: 1110, y: 700 }, routePoint('D3', 'top', -66)],
+      label: { x: 1094, y: 740 },
+    },
+    A4: {
+      points: [routePoint('D1', 'bottom', 8), routePoint('D6', 'top', -28)],
+      label: { x: 724, y: 635 },
+    },
+    A5: {
+      points: [routePoint('D4', 'bottom', 0), routePoint('D5', 'top', 0)],
+      label: { x: 166, y: 820 },
+      sourceMultiplicityPos: { x: 286, y: 785 },
+      targetMultiplicityPos: { x: 286, y: 930 },
+    },
+    A6: {
+      points: [routePoint('D4', 'right', -34), routePoint('D2', 'left', 14)],
+      label: { x: 760, y: 600 },
+      sourceMultiplicityPos: { x: 442, y: 575 },
+      targetMultiplicityPos: { x: 1068, y: 615 },
+    },
+    A7: {
+      points: [routePoint('D2', 'bottom', 0), routePoint('D3', 'top', 0)],
+      label: { x: 1294, y: 846 },
+      sourceMultiplicityPos: { x: 1278, y: 785 },
+      targetMultiplicityPos: { x: 1278, y: 930 },
+    },
+    A8: {
+      points: [routePoint('D6', 'right', 14), routePoint('D3', 'left', 14)],
+      label: { x: 1010, y: 1006 },
+      sourceMultiplicityPos: { x: 922, y: 994 },
+      targetMultiplicityPos: { x: 1068, y: 1012 },
+    },
+    A9: {
+      points: [routePoint('D5', 'right', 0), routePoint('D6', 'left', 10)],
+      label: { x: 500, y: 1018 },
+      sourceMultiplicityPos: { x: 424, y: 1038 },
+      targetMultiplicityPos: { x: 608, y: 1010 },
+    },
+  }
+
+  const pathFromPoints = (points) => {
+    if (!points || points.length === 0) {
+      return ''
+    }
+    return points.reduce((acc, point, index) => {
+      if (index === 0) {
+        return `M ${point.x} ${point.y}`
+      }
+      return `${acc} L ${point.x} ${point.y}`
+    }, '')
+  }
 
   return (
     <svg viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT + 540}`} className="diagram-svg" role="img" aria-label={diagram.title}>
@@ -742,18 +943,37 @@ function renderDesignClassDiagram(diagram, selectedEntity, onSelect) {
         }
         const isSelected = selectedEntity?.kind === 'link' && selectedEntity.id === link.id
         const isDependency = link.relationType.toUpperCase().includes('DEPENDENCY')
+        const route = designLinkRouting[link.id]
+        const points = route?.points || [source, target]
+        const d = pathFromPoints(points)
+        const label = cleanRelationshipLabel(link.relationLabel) || link.relationType
+        const multiplicity = parseLinkMultiplicityParts(link.notes)
+        const labelPoint = route?.label || {
+          x: (points[0].x + points[points.length - 1].x) / 2,
+          y: (points[0].y + points[points.length - 1].y) / 2,
+        }
         return (
           <g key={`${link.id}-line`} className="link-group" onClick={() => onSelect({ kind: 'link', entity: link })}>
-            <line
-              x1={source.x}
-              y1={source.y}
-              x2={target.x}
-              y2={target.y}
+            <path
+              d={d}
               className={isSelected ? 'diagram-link selected' : 'diagram-link'}
               markerEnd="url(#arrow-design)"
               strokeDasharray={isDependency ? '8 6' : 'none'}
             />
-            <line x1={source.x} y1={source.y} x2={target.x} y2={target.y} className="link-hitbox" />
+            <path d={d} className="link-hitbox" />
+            {multiplicity.source ? (
+              <text x={route?.sourceMultiplicityPos?.x ?? points[0].x + 18} y={route?.sourceMultiplicityPos?.y ?? points[0].y - 12} className={isSelected ? 'link-label-text design-link-multiplicity selected' : 'link-label-text design-link-multiplicity'}>
+                {multiplicity.source}
+              </text>
+            ) : null}
+            {multiplicity.target ? (
+              <text x={route?.targetMultiplicityPos?.x ?? points[points.length - 1].x - 18} y={route?.targetMultiplicityPos?.y ?? points[points.length - 1].y - 12} className={isSelected ? 'link-label-text design-link-multiplicity selected' : 'link-label-text design-link-multiplicity'}>
+                {multiplicity.target}
+              </text>
+            ) : null}
+            <text x={labelPoint.x} y={labelPoint.y + 5} className={isSelected ? 'link-label-text design-link-label selected' : 'link-label-text design-link-label'}>
+              {label}
+            </text>
           </g>
         )
       })}
@@ -765,9 +985,9 @@ function renderDesignClassDiagram(diagram, selectedEntity, onSelect) {
         const methods = node.details.filter((item) => item.startsWith('METHOD')).slice(0, 3)
         return (
           <g key={node.id} className="node-group" onClick={() => onSelect({ kind: 'node', entity: node })}>
-            <rect x={pos.x - 150} y={pos.y - 95} width="300" height="190" rx="10" className={isSelected ? 'diagram-node class-node selected' : 'diagram-node class-node'} />
-            <line x1={pos.x - 150} y1={pos.y - 56} x2={pos.x + 150} y2={pos.y - 56} className="class-divider" />
-            <line x1={pos.x - 150} y1={pos.y + 8} x2={pos.x + 150} y2={pos.y + 8} className="class-divider" />
+            <rect x={pos.x - NODE_HALF_WIDTH} y={pos.y - NODE_HALF_HEIGHT} width="300" height="190" rx="10" className={isSelected ? 'diagram-node class-node selected' : 'diagram-node class-node'} />
+            <line x1={pos.x - NODE_HALF_WIDTH} y1={pos.y - 56} x2={pos.x + NODE_HALF_WIDTH} y2={pos.y - 56} className="class-divider" />
+            <line x1={pos.x - NODE_HALF_WIDTH} y1={pos.y + 8} x2={pos.x + NODE_HALF_WIDTH} y2={pos.y + 8} className="class-divider" />
             <text x={pos.x} y={pos.y - 70} className="node-id">
               {node.title}
             </text>
@@ -784,98 +1004,103 @@ function renderDesignClassDiagram(diagram, selectedEntity, onSelect) {
           </g>
         )
       })}
-
-      {diagram.links.map((link) => {
-        const source = positions[link.source]
-        const target = positions[link.target]
-        if (!source || !target) {
-          return null
-        }
-
-        const targetedOffset = targetedCrossingLabelOffsets[link.id] || { x: 0, y: 0 }
-        const labelX = (source.x + target.x) / 2 + targetedOffset.x
-        const labelY = (source.y + target.y) / 2 + (diagonalLabelOffsets[link.id] || 0) + targetedOffset.y
-        const isSelected = selectedEntity?.kind === 'link' && selectedEntity.id === link.id
-
-        return (
-          <g key={`${link.id}-label`} className="link-group" onClick={() => onSelect({ kind: 'link', entity: link })}>
-            <rect x={labelX - 90} y={labelY - 15} width="180" height="30" rx="8" className={isSelected ? 'link-label-bg selected' : 'link-label-bg'} />
-            <text x={labelX} y={labelY + 5} className="link-label-text">
-              {link.id}: {link.relationType}
-            </text>
-          </g>
-        )
-      })}
     </svg>
   )
 }
 
 function renderUseCaseDiagram(diagram, selectedEntity, onSelect) {
+  const USECASE_RX = 128
+  const USECASE_RY = 44
   const actorNodes = diagram.nodes.filter((node) => /actor/i.test(node.subtitle) || /actor/i.test(node.label))
   const useCaseNodes = diagram.nodes.filter((node) => !actorNodes.includes(node))
 
-  const actorPositions = {}
-  const useCasePositions = {}
+  const actorPositions = {
+    A1: { x: 150, y: 250 },
+    A2: { x: 1450, y: 300 },
+    A3: { x: 1450, y: 700 },
+    A4: { x: 150, y: 1110 },
+  }
+
+  const useCasePositions = {
+    UC1: { x: 780, y: 115 },
+    UC2: { x: 500, y: 270 },
+    UC3: { x: 520, y: 430 },
+    UC4: { x: 1020, y: 345 },
+    UC5: { x: 1035, y: 505 },
+    UC6: { x: 780, y: 645 },
+    UC7: { x: 580, y: 815 },
+    UC8: { x: 945, y: 815 },
+    UC9: { x: 930, y: 965 },
+    UC10: { x: 955, y: 1115 },
+    UC11: { x: 560, y: 1235 },
+    UC12: { x: 590, y: 1375 },
+    UC13: { x: 1020, y: 1275 },
+    UC14: { x: 1025, y: 1415 },
+    UC15: { x: 780, y: 1560 },
+  }
 
   actorNodes.forEach((node, index) => {
-    const side = index % 2 === 0 ? 200 : CANVAS_WIDTH - 200
-    const row = Math.floor(index / 2)
-    actorPositions[node.id] = { x: side, y: 230 + row * 250 }
+    if (!actorPositions[node.id]) {
+      const side = index % 2 === 0 ? 150 : CANVAS_WIDTH - 150
+      const row = Math.floor(index / 2)
+      actorPositions[node.id] = { x: side, y: 250 + row * 360 }
+    }
   })
 
-  const useCols = 3
-  const useGapX = 340
   useCaseNodes.forEach((node, index) => {
-    const row = Math.floor(index / useCols)
-    const col = index % useCols
-    useCasePositions[node.id] = {
-      x: 510 + useGapX * col,
-      y: 200 + row * 190,
+    if (!useCasePositions[node.id]) {
+      const row = Math.floor(index / 3)
+      const col = index % 3
+      useCasePositions[node.id] = { x: 470 + col * 290, y: 230 + row * 160 }
     }
   })
 
   const allPositions = { ...actorPositions, ...useCasePositions }
+  const actorIds = new Set(actorNodes.map((n) => n.id))
+  const relationshipLabelPositions = {
+    I1: { x: 1010, y: 425 },
+    I2: { x: 908, y: 525 },
+    I3: { x: 575, y: 540 },
+    I4: { x: 965, y: 895 },
+    I5: { x: 1020, y: 1045 },
+    I6: { x: 585, y: 1305 },
+    E1: { x: 795, y: 1148 },
+  }
 
   return (
-    <svg viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT + 500}`} className="diagram-svg" role="img" aria-label={diagram.title}>
+    <svg viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT + 760}`} className="diagram-svg" role="img" aria-label={diagram.title}>
       <defs>
         <marker id="arrow-use" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
           <polygon points="0 0, 10 3.5, 0 7" className="arrowhead-shape" />
         </marker>
       </defs>
 
-      <rect x="350" y="110" width="1000" height="1000" rx="16" className="system-boundary" />
-      <text x="372" y="142" className="boundary-title">
-        CampusConnect System Boundary
+      <rect x="280" y="20" width="960" height="1610" rx="20" className="system-boundary" />
+      <text x="760" y="44" className="boundary-title usecase-boundary-title">
+        CampusConnect system
       </text>
 
       {diagram.links.map((link) => {
-        const source = allPositions[link.source]
-        const target = allPositions[link.target]
-        if (!source || !target) {
+        const rawSrc = allPositions[link.source]
+        const rawTgt = allPositions[link.target]
+        if (!rawSrc || !rawTgt) {
           return null
         }
         const isSelected = selectedEntity?.kind === 'link' && selectedEntity.id === link.id
         const isIncludeOrExtend = /INCLUDE|EXTEND/i.test(link.relationType)
-        const labelX = (source.x + target.x) / 2
-        const labelY = (source.y + target.y) / 2
+        const srcPt = actorIds.has(link.source) ? getActorAnchor(rawSrc, rawTgt) : getEllipseAnchor(rawSrc, rawTgt, USECASE_RX, USECASE_RY)
+        const tgtPt = actorIds.has(link.target) ? getActorAnchor(rawTgt, rawSrc) : getEllipseAnchor(rawTgt, rawSrc, USECASE_RX, USECASE_RY)
+        const d = `M ${srcPt.x} ${srcPt.y} L ${tgtPt.x} ${tgtPt.y}`
 
         return (
-          <g key={link.id} className="link-group" onClick={() => onSelect({ kind: 'link', entity: link })}>
-            <line
-              x1={source.x}
-              y1={source.y}
-              x2={target.x}
-              y2={target.y}
+          <g key={`${link.id}-line`} className="link-group" onClick={() => onSelect({ kind: 'link', entity: link })}>
+            <path
+              d={d}
               className={isSelected ? 'diagram-link selected' : 'diagram-link'}
-              markerEnd="url(#arrow-use)"
+              markerEnd={isIncludeOrExtend ? 'url(#arrow-use)' : undefined}
               strokeDasharray={isIncludeOrExtend ? '7 6' : 'none'}
             />
-            <line x1={source.x} y1={source.y} x2={target.x} y2={target.y} className="link-hitbox" />
-            <rect x={labelX - 90} y={labelY - 15} width="180" height="30" rx="8" className="link-label-bg" />
-            <text x={labelX} y={labelY + 5} className="link-label-text">
-              {link.id}: {link.relationType}
-            </text>
+            <path d={d} className="link-hitbox" />
           </g>
         )
       })}
@@ -894,7 +1119,7 @@ function renderUseCaseDiagram(diagram, selectedEntity, onSelect) {
               {node.title}
             </text>
             <text x={pos.x} y={pos.y + 90} className="node-label">
-              {node.subtitle || node.id}
+              {getActorRoleLabel(node)}
             </text>
           </g>
         )
@@ -905,12 +1130,33 @@ function renderUseCaseDiagram(diagram, selectedEntity, onSelect) {
         const isSelected = selectedEntity?.kind === 'node' && selectedEntity.id === node.id
         return (
           <g key={node.id} className="node-group" onClick={() => onSelect({ kind: 'node', entity: node })}>
-            <ellipse cx={pos.x} cy={pos.y} rx="128" ry="44" className={isSelected ? 'usecase-node selected' : 'usecase-node'} />
-            <text x={pos.x} y={pos.y - 2} className="node-id">
-              {node.title}
+            <ellipse cx={pos.x} cy={pos.y} rx={USECASE_RX} ry={USECASE_RY} className={isSelected ? 'usecase-node selected' : 'usecase-node'} />
+            <text x={pos.x} y={pos.y + 5} className="node-id usecase-node-text">
+              {getUseCaseDisplayLabel(node)}
             </text>
-            <text x={pos.x} y={pos.y + 18} className="node-label">
-              {node.id}
+          </g>
+        )
+      })}
+
+      {diagram.links.map((link) => {
+        const rawSrc = allPositions[link.source]
+        const rawTgt = allPositions[link.target]
+        if (!rawSrc || !rawTgt || !/INCLUDE|EXTEND/i.test(link.relationType)) {
+          return null
+        }
+
+        const isSelected = selectedEntity?.kind === 'link' && selectedEntity.id === link.id
+        const srcPt = actorIds.has(link.source) ? getActorAnchor(rawSrc, rawTgt) : getEllipseAnchor(rawSrc, rawTgt, USECASE_RX, USECASE_RY)
+        const tgtPt = actorIds.has(link.target) ? getActorAnchor(rawTgt, rawSrc) : getEllipseAnchor(rawTgt, rawSrc, USECASE_RX, USECASE_RY)
+        const labelPos = relationshipLabelPositions[link.id] || {
+          x: (srcPt.x + tgtPt.x) / 2,
+          y: (srcPt.y + tgtPt.y) / 2,
+        }
+
+        return (
+          <g key={`${link.id}-label`} className="link-group" onClick={() => onSelect({ kind: 'link', entity: link })}>
+            <text x={labelPos.x} y={labelPos.y} className={isSelected ? 'link-label-text usecase-relationship-label selected' : 'link-label-text usecase-relationship-label'}>
+              {link.relationType === 'EXTEND' ? '<<extend>>' : '<<include>>'}
             </text>
           </g>
         )
