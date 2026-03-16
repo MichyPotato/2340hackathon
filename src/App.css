@@ -242,6 +242,23 @@
   fill: var(--focus);
 }
 
+.design-link-label,
+.design-link-multiplicity {
+  paint-order: stroke;
+  stroke: rgba(248, 248, 244, 0.96);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+
+.design-link-label.selected,
+.design-link-multiplicity.selected {
+  fill: var(--focus);
+}
+
+.design-link-multiplicity {
+  font-size: 12px;
+}
+
 .node-group {
   cursor: pointer;
 }
