@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import './App.css'
 import diagramText from '../diagramstext.txt?raw'
+import DarkModeToggle from './DarkModeToggle'
 
 const CANVAS_WIDTH = 1600
 const CANVAS_HEIGHT = 980
@@ -1044,6 +1045,7 @@ function App() {
             </button>
           ))}
         </div>
+        <DarkModeToggle />
         <button type="button" className="info-button" aria-label="Open learning info" onClick={() => setInfoOpen(true)}>
           i
         </button>
