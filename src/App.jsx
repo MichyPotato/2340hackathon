@@ -814,34 +814,34 @@ function renderUseCaseDiagram(diagram, selectedEntity, onSelect) {
   const useCasePositions = {}
 
   actorNodes.forEach((node, index) => {
-    const side = index % 2 === 0 ? 220 : CANVAS_WIDTH - 220
+    const side = index % 2 === 0 ? 200 : CANVAS_WIDTH - 200
     const row = Math.floor(index / 2)
-    actorPositions[node.id] = { x: side, y: 210 + row * 220 }
+    actorPositions[node.id] = { x: side, y: 230 + row * 250 }
   })
 
   const useCols = 3
-  const useGapX = 760 / useCols
+  const useGapX = 340
   useCaseNodes.forEach((node, index) => {
     const row = Math.floor(index / useCols)
     const col = index % useCols
     useCasePositions[node.id] = {
-      x: 430 + useGapX * col,
-      y: 170 + row * 145,
+      x: 510 + useGapX * col,
+      y: 200 + row * 190,
     }
   })
 
   const allPositions = { ...actorPositions, ...useCasePositions }
 
   return (
-    <svg viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT + 280}`} className="diagram-svg" role="img" aria-label={diagram.title}>
+    <svg viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT + 500}`} className="diagram-svg" role="img" aria-label={diagram.title}>
       <defs>
         <marker id="arrow-use" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
           <polygon points="0 0, 10 3.5, 0 7" className="arrowhead-shape" />
         </marker>
       </defs>
 
-      <rect x="350" y="90" width="900" height="1020" rx="16" className="system-boundary" />
-      <text x="372" y="122" className="boundary-title">
+      <rect x="350" y="110" width="1000" height="1000" rx="16" className="system-boundary" />
+      <text x="372" y="142" className="boundary-title">
         CampusConnect System Boundary
       </text>
 
