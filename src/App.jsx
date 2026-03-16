@@ -28,6 +28,20 @@ The UCD's purpose is to establish the functional scope of the system from the pe
 Across all three scenarios, the UCD serves as the unified functional map of CampusConnect. Scenario 1 contributes the membership lifecycle use cases (UC2 through UC6) and establishes that Maya and Jordan have different access levels to those use cases. Scenario 2 contributes the event management and RSVP use cases (UC7 through UC10) and introduces Daniel as a third actor type with a distinct permission profile. Scenario 3 contributes the discovery and browsing use cases (UC11, UC12) that represent the read-only, member-facing side of the system. Together, the three scenarios cover five distinct actors and fifteen use cases, and the UCD is the only diagram that shows all of them in one place. The include and extend relationships are particularly meaningful here: <<include>> on UC8->UC9 makes it clear that capacity checking is not optional - it is a mandatory system behavior baked into every RSVP attempt - while <<extend>> on UC12->UC8 captures the fact that viewing event details does not guarantee a registration will follow, as Priya's behavior in Scenario 3 demonstrates.`,
 }
 
+const INFO_MODAL_TEXT = `The five diagrams are not independent artifacts - they form a layered, mutually reinforcing specification where each diagram builds on, refines, or validates the others. Understanding how they connect is as important as understanding each one individually.
+
+The UCD establishes scope; the DMD establishes vocabulary. The UCD and DMD are the two foundation diagrams, and they are complementary rather than sequential. The UCD defines the functional boundary - what the system does and for whom - while the DMD defines the conceptual boundary - what the system knows and remembers. Together they answer the two most fundamental questions about CampusConnect before any design begins. For example, the UCD identifies "Submit membership request" and "Review membership request" as distinct use cases with different actors (Jordan and Maya respectively), and the DMD confirms this by modeling MembershipRequest as a class with a status attribute that transitions from pending to approved or rejected - the class exists precisely because those two use cases need something to act on.
+
+The SSD translates UCD use cases into system contracts. Each use case in the UCD corresponds to at least one input message in an SSD. Scenario 3's SSD is essentially a detailed expansion of the use cases UC11 (View profile dashboard) and UC12 (View event details) as experienced by Priya. Where the UCD says "Priya can view event details," the SSD specifies exactly what data she sends (selectEvent(eventID)) and exactly what the system must return (eventDetails(title, desc, date, location, rsvpCount, maxCapacity)). The SSD enforces the UCD's scope boundary: because UC8 (RSVP to event) is only an extend relationship from UC12 in the UCD, Priya's SSD correctly omits any RSVP messages - the optional path is not taken in Scenario 3.
+
+The SD translates UCD use cases into internal interaction sequences. Where the SSD shows the outside of the system, the SD shows the inside. The same use cases that appear in the UCD - Create event (UC7), RSVP to event (UC8), Cancel RSVP (UC10) - appear in Scenario 2's SD as sequences of internal messages between specific components. The SD also validates the UCD's include relationships in concrete terms: UC8 includes UC9 (Check event capacity) in the UCD, and in the SD this manifests as messages M10, M14, and M22 - every single RSVP attempt in the sequence triggers a checkCapacity() call without exception, confirming that the include relationship is not optional.
+
+The DMD provides the classes that the SD and DCD operate on. Every object that appears as a lifeline or message parameter in the SD, and every class in the DCD, has its conceptual origin in the DMD. When the SD shows EventController calling storeEvent(eventData), the eventData being stored corresponds to the Event class in the DMD with its five attributes. When the SD shows checkCapacity(eventID), the capacity being checked is the maxCapacity attribute on the DMD's Event class, compared against the count of RSVPRegistration instances linked to it via the R7 association. The DMD's constraints directly govern what the SD's conditional paths mean: the capacity constraint (active RSVPs <= maxCapacity) is exactly the rule that determines whether M11 returns capacityOK or M15 returns capacityFull.
+
+The DCD is the bridge between the DMD and the SD. The DCD takes the conceptual classes from the DMD and gives them the methods and navigation paths needed to execute the interactions shown in the SD. Consider the chain: the DMD defines that Event has a maxCapacity attribute and is associated with many RSVPRegistration instances (R7). The SD shows that checkCapacity() must be callable and return a boolean or status. The DCD resolves this by placing isAtCapacity(): Boolean and getAvailableSlots(): Integer as methods on the Event class, and giving Event a navigable association to its RSVPRegistration collection (A7) so those methods can count active registrations. Without the DCD, the SD's checkCapacity() message is an ungrounded call - you know it needs to happen but not which class is responsible for it or how it accesses the data it needs.
+
+The SSD and SD together define the full vertical slice of behavior. For any given use case, the SSD defines the external promise (what inputs come in, what outputs go out) and the SD defines the internal fulfillment (which objects collaborate to deliver that output). In Scenario 2, if you place the SSD and SD side by side, you can trace a message from actor to system boundary (SSD level) and then watch it decompose into the internal message chain (SD level). This layered view is what makes the diagrams collectively more useful than any single one alone - the SSD tells you the system must return a capacity notification when a student tries to register for a full event, and the SD shows exactly how the system produces that notification through the checkCapacity() -> capacityFull -> eventFullNotification chain.`
+
 function normalizeId(id) {
   return id.toUpperCase().trim()
 }
@@ -251,8 +265,7 @@ function getTeachingMeta(diagram, index, diagrams) {
     connectionText,
     dropdownText:
       'Study tip: click one node, then every connected relationship, and explain how each constraint changes allowed behavior.',
-    infoText:
-      'Use this workspace to compare how the same scenario appears as interactions, responsibilities, domain concepts, and user goals.',
+    infoText: INFO_MODAL_TEXT,
     previous,
     next,
   }
@@ -1430,7 +1443,11 @@ function App() {
         <div className="modal-backdrop" role="presentation" onClick={() => setInfoOpen(false)}>
           <div className="modal-card" role="dialog" aria-modal="true" aria-label="Extra course information" onClick={(event) => event.stopPropagation()}>
             <h2>Course Diagram Guide</h2>
-            <p>{teachingMeta.infoText}</p>
+            {teachingMeta.infoText
+              .split('\n\n')
+              .map((paragraph) => (
+                <p key={paragraph}>{paragraph}</p>
+              ))}
             <p>{teachingMeta.previous ? `Previous context: ${teachingMeta.previous}.` : 'This is the first modeling perspective in the sequence.'}</p>
             <p>{teachingMeta.next ? `Next context: ${teachingMeta.next}.` : 'This is the final synthesis perspective in the sequence.'}</p>
             <button type="button" onClick={() => setInfoOpen(false)}>
