@@ -8,6 +8,8 @@
   --node: #4f7a86;
   --link: #6e8d44;
 
+  --bg-gradient: linear-gradient(155deg, rgba(236, 218, 171, 0.48), rgba(201, 218, 200, 0.48));
+
   font-family: 'Trebuchet MS', 'Gill Sans', 'Segoe UI', sans-serif;
   color: var(--ink-soft);
   font-size: 16px;
@@ -16,6 +18,19 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root.dark {
+  --page: #1a2530;
+  --ink: #e8dfc8;
+  --ink-soft: #b0c4ce;
+  --line: #3a4a54;
+  --line-strong: #5a7080;
+  --focus: #e07840;
+  --node: #6a9fae;
+  --link: #8aaa5a;
+
+  --bg-gradient: linear-gradient(155deg, rgba(30, 50, 60, 0.48), rgba(40, 60, 50, 0.48));
 }
 
 * {
@@ -30,9 +45,8 @@ body,
 }
 
 body {
-  background:
-    linear-gradient(155deg, rgba(236, 218, 171, 0.48), rgba(201, 218, 200, 0.48)),
-    var(--page);
+  background: var(--bg-gradient), var(--page);
+  transition: background 0.3s, color 0.3s;
 }
 
 h1,
